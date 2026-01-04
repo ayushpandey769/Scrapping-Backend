@@ -86,8 +86,7 @@ export async function performHumanLogin(
       // Launch Playwright Chromium
       // Launch Playwright Chromium
       browser = await chromium.launch({
-        headless: true, // Render requires headless mode
-        slowMo: 50,
+        headless: true,
         args: [
           "--disable-blink-features=AutomationControlled",
           "--no-sandbox",
@@ -121,13 +120,36 @@ export async function performHumanLogin(
     }
 
     if (!page) {
-      // Create context with specific viewport and user agent
+      // Create context with MINIMAL settings to save memory
       const context = await browser.newContext({
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        viewport: { width: 1366, height: 768 },
+        viewport: { width: 800, height: 600 }, // Smaller viewport = less memory
+        deviceScaleFactor: 1,
+        hasTouch: false,
+        javaScriptEnabled: true,
       });
       page = await context.newPage();
+
+      // Block heavy resources to save memory (CRITICAL for 512MB limit)
+      await page.route("**/*", (route) => {
+        const resourceType = route.request().resourceType();
+        const url = route.request().url();
+        
+        // Block images, media, fonts, and unnecessary scripts
+        if (
+          resourceType === "image" ||
+          resourceType === "media" || 
+          resourceType === "font" ||
+          resourceType === "stylesheet" || // Block CSS to save memory
+          url.includes("analytics") ||
+          url.includes("doubleclick") ||
+          url.includes("google-analytics")
+        ) {
+          return route.abort();
+        }
+        return route.continue();
+      });
     }
 
     console.log("🌐 Navigating to LinkedIn...");
