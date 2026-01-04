@@ -31,25 +31,76 @@ export const submitVerification = async (req, res) => {
         throw new Error("PIN input field currently not visible on page");
       }
 
-      await pinInput.type(code, { delay: 100 });
-      await humanDelay(500, 1000);
+      // Clear the input field first (in case there's old data)
+      await pinInput.click({ clickCount: 3 }); // Select all
+      await page.keyboard.press('Backspace');
+      await humanDelay(300, 500);
 
+      // Type the code
+      console.log(`📝 Typing verification code: ${code}`);
+      await pinInput.type(code, { delay: 150 });
+      await humanDelay(800, 1200);
+
+      // Find and click submit button
       const submitBtn = await page.$('#email-pin-submit-button, button[type="submit"]');
       if (submitBtn) {
+          console.log("🖱️ Clicking submit button...");
           await submitBtn.click();
       } else {
+          console.log("⌨️ Pressing Enter key...");
           await page.keyboard.press('Enter');
       }
 
-      console.log("⏳ Waiting for PIN submission...");
+      console.log("⏳ Waiting for response from LinkedIn...");
       
-      // Wait for navigation away from checkpoint
-      await page.waitForFunction(
+      // Wait a bit for the page to react
+      await humanDelay(2000, 3000);
+
+      // Check for error messages FIRST before waiting for navigation
+      const errorSelectors = [
+        '.form__label--error',
+        '.alert--error',
+        '[data-test-id="error-message"]',
+        '.artdeco-inline-feedback--error',
+        'div[role="alert"]'
+      ];
+
+      for (const selector of errorSelectors) {
+        const errorElement = await page.$(selector);
+        if (errorElement) {
+          const errorText = await errorElement.textContent();
+          console.log(`❌ LinkedIn error detected: ${errorText}`);
+          throw new apiError(400, `Invalid verification code: ${errorText.trim()}`);
+        }
+      }
+
+      // If no error, wait for successful navigation
+      try {
+        await page.waitForFunction(
           () => !window.location.href.includes('checkpoint') && !window.location.href.includes('challenge'), 
-          { timeout: 20000 }
-      );
-      
-      console.log("✅ PIN Accepted! Resuming scrape...");
+          { timeout: 15000 }
+        );
+        console.log("✅ PIN Accepted! Resuming scrape...");
+      } catch (waitError) {
+        // If waitForFunction times out, it means we're still on checkpoint page
+        // Check one more time for errors
+        const currentUrl = page.url();
+        if (currentUrl.includes('checkpoint') || currentUrl.includes('challenge')) {
+          console.log("❌ Still on verification page after timeout");
+          
+          // Try to get any error message
+          const errorMsg = await page.evaluate(() => {
+            const errorEl = document.querySelector('.form__label--error, .alert--error, [role="alert"]');
+            return errorEl ? errorEl.textContent.trim() : null;
+          });
+          
+          if (errorMsg) {
+            throw new apiError(400, `Verification failed: ${errorMsg}`);
+          } else {
+            throw new apiError(408, "Verification timeout - LinkedIn did not respond. The code might be incorrect or expired.");
+          }
+        }
+      }
 
       // Remove session from store as we are resuming
       removeSession(email);
