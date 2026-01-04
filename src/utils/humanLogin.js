@@ -92,6 +92,7 @@ export async function performHumanLogin(
           "--disable-blink-features=AutomationControlled",
           "--no-sandbox",
           "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage", // CRITICAL for Docker/Render
           "--disable-infobars",
           "--window-position=0,0",
           "--ignore-certifcate-errors",
