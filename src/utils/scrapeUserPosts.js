@@ -65,8 +65,8 @@ export async function scrapeUserPosts(
       
       // Navigate to the user's own profile page
       await page.goto("https://www.linkedin.com/in/me/", {
-        waitUntil: "load",
-        timeout: 30000,
+        waitUntil: "domcontentloaded", // Faster than "load"
+        timeout: 60000, // Increase timeout to 60s
       });
 
       console.log("⏳ Waiting for page to fully load...");
