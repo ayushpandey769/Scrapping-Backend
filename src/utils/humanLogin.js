@@ -286,6 +286,13 @@ export async function performHumanLogin(
   } catch (error) {
     console.error("❌ Login error:", error.message);
 
+    // Don't close browser if verification is needed (it must stay open for OTP)
+    if (error instanceof VerificationError) {
+      console.log("🔓 Browser kept open for verification (in humanLogin)");
+      throw error;
+    }
+
+    // For other errors, close the browser
     if (createdBrowser && browser) {
       await browser.close();
     }
