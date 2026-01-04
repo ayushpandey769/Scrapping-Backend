@@ -86,7 +86,7 @@ export async function performHumanLogin(
       // Launch Playwright Chromium
       // Launch Playwright Chromium
       browser = await chromium.launch({
-        headless: false, // Render requires headless mode
+        headless: true, // Render requires headless mode
         slowMo: 50,
         args: [
           "--disable-blink-features=AutomationControlled",
