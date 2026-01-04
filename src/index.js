@@ -28,6 +28,22 @@ app.use("/data", (req, res) => {
   res.send("SIgisgfdbsgfius");
 });
 
+// Import error class properly if needed, or define inline
+import { apiError } from "./utils/apiError.js";
+
+// 404 Handler (Must be last route)
+app.use((req, res, next) => {
+  res.status(404).json(new apiError(404, `Route ${req.originalUrl} not found`));
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal server error";
+  res.status(statusCode).json(new apiError(statusCode, message, err.errors || []));
+});
+
 
 // Connect to DB in background
 console.log("⏳ Connecting to MongoDB...");
