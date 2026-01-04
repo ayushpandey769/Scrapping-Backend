@@ -1,6 +1,7 @@
 import "./config/env.js";
 import connectDB from "./DB/connectDB.js";
 import { app } from "./app.js";
+import mongoose from "mongoose";
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
@@ -10,28 +11,42 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-connectDB()
-  .then(() => {
-    const server = app.listen(process.env.PORT || 5000, () => {
-      console.log(`Server is running at port: ${process.env.PORT}`);
-    });
+const PORT = process.env.PORT || 5000;
 
-    // Handle unhandled promise rejections
-    process.on("unhandledRejection", (error) => {
-      console.error("❌ UNHANDLED REJECTION! Shutting down gracefully...");
-      console.error(error.name, error.message);
-      console.error(error.stack);
-      
-      server.close(() => {
-        process.exit(1);
-      });
-    });
-  })
-  .catch((err) => {
-    console.log("❌ MongoDB connection failed", err);
-    process.exit(1);
-  });
+// Start Server IMMEDIATELY to satisfy Render Health Check
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server is running at port: ${PORT}`);
+});
+
+// Health check endpoint (Render uses / by default, but good to have)
+app.get("/health", (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Connecting/Disconnected";
+  res.status(200).json({ status: "OK", db: dbStatus });
+});
 
 app.use("/data", (req, res) => {
   res.send("SIgisgfdbsgfius");
 });
+
+
+// Connect to DB in background
+console.log("⏳ Connecting to MongoDB...");
+connectDB()
+  .then(() => {
+    console.log("✅ MongoDB Connected successfully");
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection failed:", err.message);
+    // Don't exit process, just log. Or maybe exit if critical?
+    // For now, let's keep it alive so we can see logs.
+  });
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (error) => {
+  console.error("❌ UNHANDLED REJECTION! Shutting down gracefully...");
+  console.error(error.name, error.message);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
