@@ -62,62 +62,101 @@ export async function scrapeUserPosts(
     // If no profileUrl provided, get the logged-in user's profile
     if (!profileUrl) {
       console.log("🔍 Detecting logged-in user's profile...");
+
+      // Optimization: Try to extract username from CURRENT page (likely Feed) first
+      // This avoids the risky/slow navigation to /in/me/
+      console.log("🔍 Attempting to extract username from current page...");
       
-      // Navigate to the user's own profile page
-      await page.goto("https://www.linkedin.com/in/me/", {
-        waitUntil: "domcontentloaded", // Faster than "load"
-        timeout: 60000, // Increase timeout to 60s
+      let extractedUsername = await page.evaluate(() => {
+        // Method 1: Mini-profile in left sidebar (Feed)
+        const miniProfileLink = document.querySelector('.feed-identity-module__actor-link');
+        if (miniProfileLink && miniProfileLink.href) {
+            const match = miniProfileLink.href.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1] !== 'me') return match[1];
+        }
+
+        // Method 2: "Me" icon in navbar
+        const navProfileLink = document.querySelector('.global-nav__me video, .global-nav__me img');
+        if (navProfileLink) {
+            const parent = navProfileLink.closest('a'); // usually triggers dropdown, but might have href
+            // Actually the "Me" button usually doesn't have the username in href directly in DOM until clicked
+        }
+        
+        // Method 3: Any profile link that looks like 'me'
+        const profileLinks = Array.from(document.querySelectorAll('a[href*="/in/"]'));
+        for (const link of profileLinks) {
+             // Look for prominent links, often with 'actor' or 'profile' in class
+             if (link.className.includes('actor') || link.className.includes('profile') || link.className.includes('identity')) {
+                 const match = link.href.match(/\/in\/([^\/\?]+)/);
+                 if (match && match[1] !== 'me') return match[1];
+             }
+        }
+        return null;
       });
 
-      console.log("⏳ Waiting for page to fully load...");
-      await humanDelay(3000, 5000);
-
-      // LinkedIn doesn't redirect /in/me/ anymore, so extract username from the page
-      console.log("🔍 Extracting username from page content...");
+      if (!extractedUsername) {
+          console.log("⚠️ Could not extract from current page, trying fallback navigation to /in/me/...");
+          try {
+            await page.goto("https://www.linkedin.com/in/me/", {
+                waitUntil: "domcontentloaded",
+                timeout: 45000, 
+            });
+            await humanDelay(2000, 4000);
+          } catch (navErr) {
+              console.log("⚠️ Navigation to /in/me/ timed out, trying to extract anyway...");
+          }
+      } else {
+          console.log("✅ Extracted username directly from Feed!", extractedUsername);
+      }
       
-      const extractedUsername = await page.evaluate(() => {
-        // Method 1: Try to get from profile edit button or view profile link
-        const editProfileBtn = document.querySelector('a[href*="/in/"][href*="/edit/"]');
-        if (editProfileBtn && editProfileBtn.href) {
-          const match = editProfileBtn.href.match(/\/in\/([^\/\?]+)/);
-          if (match && match[1] !== 'me') {
-            return match[1];
-          }
-        }
-        
-        // Method 2: Try to get from any profile link
-        const profileLinks = document.querySelectorAll('a[href*="/in/"]');
-        for (const link of profileLinks) {
-          const match = link.href.match(/\/in\/([^\/\?]+)/);
-          if (match && match[1] !== 'me' && !match[1].includes('detail')) {
-            return match[1];
-          }
-        }
-        
-        // Method 3: Try canonical URL
-        const canonical = document.querySelector('link[rel="canonical"]');
-        if (canonical && canonical.href) {
-          const match = canonical.href.match(/\/in\/([^\/\?]+)/);
-          if (match && match[1] !== 'me') {
-            return match[1];
-          }
-        }
-        
-        // Method 4: Try to get from profile image link
-        const profileImg = document.querySelector('img[alt*="profile"]');
-        if (profileImg) {
-          const parent = profileImg.closest('a');
-          if (parent && parent.href) {
-            const match = parent.href.match(/\/in\/([^\/\?]+)/);
+      // If we still don't have it, run the robust extractor on the current page (which is either Feed or Profile)
+      if (!extractedUsername) {
+        console.log("🔍 Running robust username extraction...");
+        extractedUsername = await page.evaluate(() => {
+          // Method 1: Try to get from profile edit button or view profile link
+          const editProfileBtn = document.querySelector('a[href*="/in/"][href*="/edit/"]');
+          if (editProfileBtn && editProfileBtn.href) {
+            const match = editProfileBtn.href.match(/\/in\/([^\/\?]+)/);
             if (match && match[1] !== 'me') {
               return match[1];
             }
           }
-        }
-        
-        return null;
-      });
-      
+          
+          // Method 2: Try to get from any profile link
+          const profileLinks = document.querySelectorAll('a[href*="/in/"]');
+          for (const link of profileLinks) {
+            const match = link.href.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1] !== 'me' && !match[1].includes('detail')) {
+              return match[1];
+            }
+          }
+          
+          // Method 3: Try canonical URL
+          const canonical = document.querySelector('link[rel="canonical"]');
+          if (canonical && canonical.href) {
+            const match = canonical.href.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1] !== 'me') {
+              return match[1];
+            }
+          }
+          
+          // Method 4: Try to get from profile image link
+          const profileImg = document.querySelector('img[alt*="profile"]');
+          if (profileImg) {
+            const parent = profileImg.closest('a');
+            if (parent && parent.href) {
+              const match = parent.href.match(/\/in\/([^\/\?]+)/);
+              if (match && match[1] !== 'me') {
+                return match[1];
+              }
+            }
+          }
+          
+          return null;
+        });
+      }
+
+      // Final check: Do we have a username?
       if (extractedUsername) {
         profileUrl = `https://www.linkedin.com/in/${extractedUsername}`;
         console.log("✅ Extracted username:", extractedUsername);
