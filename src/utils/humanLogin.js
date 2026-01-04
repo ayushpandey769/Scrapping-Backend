@@ -166,25 +166,39 @@ export async function performHumanLogin(
 
     await humanDelay(500, 1000);
 
-    // Uncheck "Remember me" or "Keep me signed in" checkbox if present
+    // Uncheck "Keep me signed in" checkbox
     try {
-      // Try multiple selectors for the remember me checkbox
-      const rememberMeCheckbox =
-        (await page.$("#rememberMeOptIn-checkbox")) ||
-        (await page.$('input[id*="remember"]')) ||
-        (await page.$('input[name*="remember"]'));
-
-      if (rememberMeCheckbox) {
-        const isChecked = await rememberMeCheckbox.isChecked();
-        console.log(`📋 Remember me checkbox found, checked: ${isChecked}`);
-
+      console.log("📋 Checking 'Keep me signed in' status...");
+      
+      // Target the checkbox and its label
+      const checkboxSelector = '#rememberMeOptIn-checkbox';
+      const labelSelector = 'label[for="rememberMeOptIn-checkbox"]';
+      
+      // Wait briefly for it to appear
+      const checkbox = await page.$(checkboxSelector);
+      
+      if (checkbox) {
+        // Check state using evaluate for reliability
+        const isChecked = await page.$eval(checkboxSelector, el => el.checked);
+        console.log(`📋 'Keep me signed in' is currently: ${isChecked ? 'CHECKED' : 'UNCHECKED'}`);
+        
         if (isChecked) {
-          console.log("📋 Unchecking 'Remember me' checkbox...");
-          await rememberMeCheckbox.click();
+          console.log("👇 Unchecking via Label click...");
+          // Click the LABEL, not the checkbox (often works better for hidden inputs)
+          const label = await page.$(labelSelector);
+          if (label) {
+            await label.click();
+          } else {
+            await checkbox.click();
+          }
           await humanDelay(500, 1000);
+          
+          // Verify
+          const stillChecked = await page.$eval(checkboxSelector, el => el.checked);
+          console.log(`📋 Status after click: ${stillChecked ? 'STILL CHECKED (Failed)' : 'UNCHECKED (Success)'}`);
         }
       } else {
-        console.log("⚠️ No 'Remember me' checkbox found");
+        console.log("⚠️ Could not find 'Keep me signed in' checkbox");
       }
     } catch (err) {
       console.log("⚠️ Error handling checkbox:", err.message);
