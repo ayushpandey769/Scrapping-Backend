@@ -86,7 +86,7 @@ export async function performHumanLogin(
       // Launch Playwright Chromium
       // Launch Playwright Chromium
       browser = await chromium.launch({
-        headless: true,
+        headless: false, // Must be true for Render
         args: [
           "--disable-blink-features=AutomationControlled",
           "--no-sandbox",
@@ -201,12 +201,53 @@ export async function performHumanLogin(
     console.log("🚀 Clicking Sign In button...");
     await humanClick(page, 'button[type="submit"]');
 
-    // Wait for navigation after login
-    await page.waitForLoadState("domcontentloaded").catch(() => {});
+    // Wait for either navigation away from login OR error message to appear
+    console.log("⏳ Waiting for login response...");
+    
+    try {
+      // Wait up to 10 seconds for EITHER:
+      // 1. Navigation away from /login (success)
+      // 2. Error message appears (failure)
+      await Promise.race([
+        page.waitForURL((url) => !url.toString().includes('/login'), { timeout: 10000 }),
+        page.waitForSelector('.form__label--error, .alert, [role="alert"]', { timeout: 10000 })
+      ]);
+    } catch (e) {
+      // Timeout - neither happened, continue to check manually
+    }
 
-    await humanDelay(2000, 4000);
+    await humanDelay(1000, 2000);
 
     const currentPageUrl = page.url();
+    
+    // FIRST: Check if still on login page (likely error)
+    if (currentPageUrl.includes("/login")) {
+      console.log("⚠️ Still on login page, checking for errors...");
+      
+      // Check for error messages with multiple selectors
+      const errorSelectors = [
+        '.form__label--error',
+        '.alert',
+        '[role="alert"]',
+        '.artdeco-inline-feedback--error',
+        '#error-for-password',
+        '#error-for-username'
+      ];
+      
+      for (const selector of errorSelectors) {
+        const errorElement = await page.$(selector);
+        if (errorElement) {
+          const errorText = await errorElement.textContent();
+          console.error(`❌ Login error detected: ${errorText}`);
+          throw new Error(`Login failed: ${errorText.trim()}`);
+        }
+      }
+      
+      // If no specific error found but still on login page, generic error
+      throw new Error(
+        "Login failed - Incorrect email or password. Please check your credentials and try again."
+      );
+    }
 
     // Check for security verification (checkpoint/challenge)
     if (
@@ -247,27 +288,6 @@ export async function performHumanLogin(
       ) {
         throw new Error("Security verification not completed in time");
       }
-    }
-
-    if (page.url().includes("/login")) {
-      // Check for error messages on the login page
-      const errorElement = await page.$(".form__label--error");
-      if (errorElement) {
-        const errorText = await errorElement.textContent();
-        throw new Error(`Login failed: ${errorText}`);
-      }
-
-      // Check for alert messages
-      const alertElement = await page.$(".alert");
-      if (alertElement) {
-        const alertText = await alertElement.textContent();
-        throw new Error(`Login failed: ${alertText}`);
-      }
-
-      // Generic login failure
-      throw new Error(
-        "Login failed - Incorrect email or password. Please check your credentials and try again."
-      );
     }
 
     console.log("✅ Login successful!");
