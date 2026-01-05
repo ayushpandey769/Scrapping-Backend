@@ -62,6 +62,13 @@ export async function scrapeUserPosts(
     // If no profileUrl provided, get the logged-in user's profile
     if (!profileUrl) {
       console.log("🔍 Detecting logged-in user's profile...");
+      
+      // Wait for page to stabilize after login/verification
+      await humanDelay(3000, 5000);
+      
+      // Log current URL for debugging
+      const currentUrl = page.url();
+      console.log(`📍 Current URL: ${currentUrl}`);
 
       // Optimization: Try to extract username from CURRENT page (likely Feed) first
       // This avoids the risky/slow navigation to /in/me/
@@ -152,6 +159,15 @@ export async function scrapeUserPosts(
             }
           }
           
+          // Method 5: Try to get from page metadata
+          const metaOgUrl = document.querySelector('meta[property="og:url"]');
+          if (metaOgUrl && metaOgUrl.content) {
+            const match = metaOgUrl.content.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1] !== 'me') {
+              return match[1];
+            }
+          }
+          
           return null;
         });
       }
@@ -162,7 +178,8 @@ export async function scrapeUserPosts(
         console.log("✅ Extracted username:", extractedUsername);
         console.log("✅ Profile URL:", profileUrl);
       } else {
-        throw new Error("Failed to extract username from profile page. Please check if you're logged in correctly.");
+        const debugUrl = page.url();
+        throw new Error(`Failed to extract username from profile page. Current URL: ${debugUrl}. Please check if you're logged in correctly.`);
       }
     }
 
