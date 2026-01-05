@@ -22,11 +22,20 @@ export const userScrapper = async (req, res) => {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      const postsCount = await Post.countDocuments({
-        user: existingUser._id,
-      });
+      // Fetch the actual posts, not just count
+      const posts = await Post.find({ user: existingUser._id }).sort({ createdAt: -1 });
 
       console.log(`✅ User with email ${email} already exists in database`);
+      console.log(`📊 Returning ${posts.length} posts from cache`);
+      
+      // DEBUG: Log the response structure
+      console.log('Response data structure:', JSON.stringify({
+        username: existingUser.username,
+        email: existingUser.email,
+        postsScraped: posts.length,
+        postsArrayLength: posts.length,
+        firstPostSample: posts[0] ? { urn: posts[0].urn, description: posts[0].description?.substring(0, 50) } : null
+      }, null, 2));
 
       return res.status(200).json(
         new apiResponse(
@@ -34,7 +43,8 @@ export const userScrapper = async (req, res) => {
           {
             username: existingUser.username,
             email: existingUser.email,
-            postsScraped: postsCount,
+            postsScraped: posts.length,
+            posts: posts, // RETURN POSTS DATA
             fromCache: true,
           },
           "User already exists, fetched from database"
@@ -57,11 +67,11 @@ export const userScrapper = async (req, res) => {
     const existingUserByUsername = await User.findOne({ username });
 
     if (existingUserByUsername) {
-      const postsCount = await Post.countDocuments({
-        user: existingUserByUsername._id,
-      });
+      // Fetch the actual posts, not just count
+      const posts = await Post.find({ user: existingUserByUsername._id }).sort({ createdAt: -1 });
 
       console.log(`✅ User ${username} already exists in database`);
+      console.log(`📊 Returning ${posts.length} posts from cache`);
 
       return res.status(200).json(
         new apiResponse(
@@ -69,7 +79,8 @@ export const userScrapper = async (req, res) => {
           {
             username,
             email: existingUserByUsername.email,
-            postsScraped: postsCount,
+            postsScraped: posts.length,
+            posts: posts, // RETURN POSTS DATA
             fromCache: true,
           },
           "User already exists, fetched from database"
@@ -90,6 +101,7 @@ export const userScrapper = async (req, res) => {
           username: result.username,
           email: email,
           postsScraped: result.posts.length,
+          posts: result.posts, // RETURN THE ACTUAL DATA
           fromCache: false,
         },
         "User scraped and saved successfully"

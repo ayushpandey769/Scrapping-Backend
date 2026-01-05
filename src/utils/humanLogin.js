@@ -91,65 +91,21 @@ export async function performHumanLogin(
           "--disable-blink-features=AutomationControlled",
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-infobars",
-          "--window-position=0,0",
-          "--ignore-certificate-errors",
-          "--ignore-certificate-errors-spki-list",
-          "--disable-accelerated-2d-canvas",
+          "--disable-dev-shm-usage", // Required for Docker
           "--disable-gpu",
-          "--enable-features=NetworkService",
-          // Memory Optimizations for Render Free Tier (512MB limit)
-          "--disable-extensions",
-          "--disable-component-extensions-with-background-pages",
-          "--disable-default-apps",
-          "--mute-audio",
-          "--no-default-browser-check",
-          "--autoplay-policy=user-gesture-required",
-          "--disable-background-timer-throttling",
-          "--disable-backgrounding-occluded-windows",
-          "--disable-notifications",
-          "--disable-background-networking",
-          "--disable-breakpad",
-          "--disable-component-update",
-          "--disable-domain-reliability",
-          "--disable-sync",
         ],
       });
       createdBrowser = true;
     }
 
     if (!page) {
-      // Create context with MINIMAL settings to save memory
+      // Create context with normal settings
       const context = await browser.newContext({
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        viewport: { width: 800, height: 600 }, // Smaller viewport = less memory
-        deviceScaleFactor: 1,
-        hasTouch: false,
-        javaScriptEnabled: true,
+        viewport: { width: 1366, height: 768 },
       });
       page = await context.newPage();
-
-      // Block heavy resources to save memory (CRITICAL for 512MB limit)
-      await page.route("**/*", (route) => {
-        const resourceType = route.request().resourceType();
-        const url = route.request().url();
-        
-        // Block images, media, fonts, and unnecessary scripts
-        if (
-          resourceType === "image" ||
-          resourceType === "media" || 
-          resourceType === "font" ||
-          resourceType === "stylesheet" || // Block CSS to save memory
-          url.includes("analytics") ||
-          url.includes("doubleclick") ||
-          url.includes("google-analytics")
-        ) {
-          return route.abort();
-        }
-        return route.continue();
-      });
     }
 
     console.log("🌐 Navigating to LinkedIn...");
