@@ -31,15 +31,38 @@ export const submitVerification = async (req, res) => {
         throw new Error("PIN input field currently not visible on page");
       }
 
-      // Clear the input field first (in case there's old data)
-      await pinInput.click({ clickCount: 3 }); // Select all
-      await page.keyboard.press('Backspace');
+      // Clear the input field more thoroughly
+      await pinInput.click();
       await humanDelay(300, 500);
+      
+      // Select all and delete (multiple methods for reliability)
+      await page.keyboard.press('Control+A');
+      await page.keyboard.press('Backspace');
+      await humanDelay(200, 300);
+      
+      // Verify field is empty
+      const currentValue = await pinInput.inputValue();
+      if (currentValue) {
+        console.log(`⚠️ Field not empty, clearing again: "${currentValue}"`);
+        await pinInput.fill(''); // Force clear
+        await humanDelay(200, 300);
+      }
 
-      // Type the code
+      // Type the code slowly and deliberately
       console.log(`📝 Typing verification code: ${code}`);
-      await pinInput.type(code, { delay: 150 });
-      await humanDelay(800, 1200);
+      await pinInput.type(code, { delay: 200 }); // Slower typing
+      await humanDelay(500, 800);
+      
+      // VERIFY what was actually typed
+      const typedValue = await pinInput.inputValue();
+      console.log(`✅ Verified input value: "${typedValue}"`);
+      
+      if (typedValue !== code) {
+        console.error(`❌ Mismatch! Expected: "${code}", Got: "${typedValue}"`);
+        // Try one more time
+        await pinInput.fill(code);
+        await humanDelay(500, 800);
+      }
 
       // Find and click submit button
       const submitBtn = await page.$('#email-pin-submit-button, button[type="submit"]');
@@ -53,8 +76,8 @@ export const submitVerification = async (req, res) => {
 
       console.log("⏳ Waiting for response from LinkedIn...");
       
-      // Wait a bit for the page to react
-      await humanDelay(2000, 3000);
+      // Wait longer for the page to react (LinkedIn can be slow)
+      await humanDelay(3000, 4000);
 
       // Check for error messages FIRST before waiting for navigation
       const errorSelectors = [
@@ -66,13 +89,18 @@ export const submitVerification = async (req, res) => {
       ];
 
       for (const selector of errorSelectors) {
-        const errorElement = await page.$(selector);
-        if (errorElement) {
+        // Only consider checking if the element is actually visible
+        if (await page.isVisible(selector).catch(() => false)) {
+          const errorElement = await page.$(selector);
           const errorText = await errorElement.textContent();
-          console.log(`❌ LinkedIn error detected: ${errorText}`);
-          throw new apiError(400, `Invalid verification code: ${errorText.trim()}`);
+          
+          if (errorText && errorText.trim().length > 0) {
+            console.log(`❌ LinkedIn error detected: ${errorText}`);
+            throw new apiError(400, `Invalid verification code: ${errorText.trim()}`);
+          }
         }
       }
+
 
       // If no error, wait for successful navigation
       try {
