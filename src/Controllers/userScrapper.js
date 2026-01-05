@@ -27,15 +27,6 @@ export const userScrapper = async (req, res) => {
 
       console.log(`✅ User with email ${email} already exists in database`);
       console.log(`📊 Returning ${posts.length} posts from cache`);
-      
-      // DEBUG: Log the response structure
-      console.log('Response data structure:', JSON.stringify({
-        username: existingUser.username,
-        email: existingUser.email,
-        postsScraped: posts.length,
-        postsArrayLength: posts.length,
-        firstPostSample: posts[0] ? { urn: posts[0].urn, description: posts[0].description?.substring(0, 50) } : null
-      }, null, 2));
 
       return res.status(200).json(
         new apiResponse(

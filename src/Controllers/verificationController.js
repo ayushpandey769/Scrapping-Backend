@@ -154,6 +154,7 @@ export const submitVerification = async (req, res) => {
             username: result.username,
             email: email,
             postsScraped: result.posts.length,
+            posts: result.posts, // Include posts for frontend
             fromCache: false,
           },
           "Verification successful and scraping completed"

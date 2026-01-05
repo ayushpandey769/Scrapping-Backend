@@ -28,3 +28,15 @@ export class VerificationError extends Error {
     this.statusCode = 202; // Accepted (processing not completed)
   }
 }
+
+// Cleanup sessions older than 10 minutes (prevents memory leak)
+setInterval(() => {
+  const TEN_MINUTES = 10 * 60 * 1000;
+  for (const [email, session] of browserStore.entries()) {
+    if (Date.now() - session.timestamp > TEN_MINUTES) {
+      console.log(`🧹 Cleaning up stale session for ${email}`);
+      session.browser.close().catch(() => {});
+      browserStore.delete(email);
+    }
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
