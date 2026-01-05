@@ -11,7 +11,7 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
 // Start Server IMMEDIATELY to satisfy Render Health Check
 const server = app.listen(PORT, () => {
